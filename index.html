@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="robots" content="noindex,nofollow" />
+    <meta name="theme-color" content="#203245" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="法语复习" />
+    <title>法语 A1 词汇复习</title>
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="icon" href="./icons/icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="./icons/icon-180.png" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div id="app-shell">
+      <header class="topbar">
+        <div class="brand">
+          <span class="brand-mark">A1</span>
+          <div class="brand-copy">
+            <strong>MÉTRO DES MOTS</strong>
+            <span id="screen-title">法语词汇复习</span>
+          </div>
+        </div>
+        <button class="icon-button" id="settings-button" aria-label="设置">•••</button>
+      </header>
+
+      <main>
+        <section id="dashboard-screen" class="screen">
+          <div class="hero">
+            <p class="eyebrow">LIGNE A1 · VOCABULAIRE</p>
+            <h1>继续你的<br />法语线路。</h1>
+            <p class="hero-copy">进度会自动保存在这台手机。关闭网页后，下次打开会接着复习。</p>
+          </div>
+
+          <section class="stats-grid" aria-label="学习概况">
+            <article class="stat-card accent">
+              <span>今日到期</span>
+              <strong id="due-count">0</strong>
+            </article>
+            <article class="stat-card">
+              <span>待复习词条</span>
+              <strong id="new-count">0</strong>
+            </article>
+            <article class="stat-card">
+              <span>已经见过</span>
+              <strong id="seen-count">0</strong>
+            </article>
+            <article class="stat-card">
+              <span>正确率</span>
+              <strong id="accuracy-count">—</strong>
+            </article>
+          </section>
+
+          <section id="resume-panel" class="resume-panel hidden">
+            <div>
+              <span class="section-label">上次未完成</span>
+              <strong id="resume-copy">还剩 0 张</strong>
+            </div>
+            <button id="resume-button" class="text-button">继续</button>
+          </section>
+
+          <section class="start-panel">
+            <span class="section-label">DÉPART · 本轮复习</span>
+            <p class="mode-summary">题型随机混合：法译中、中译法、听写、音标、词性和阴阳性。</p>
+            <button id="start-button" class="primary-button">
+              <span>开始本轮复习</span>
+              <span class="button-arrow">→</span>
+            </button>
+            <div class="filter-grid">
+              <label>
+                <span class="section-label">复习范围</span>
+                <select id="unit-filter">
+                  <option value="all">全部单元</option>
+                  <option value="A1 U1">A1 U1</option>
+                  <option value="A1 U2">A1 U2</option>
+                  <option value="A1 U3">A1 U3</option>
+                  <option value="A1 U4">A1 U4</option>
+                  <option value="A1 U5">A1 U5</option>
+                  <option value="A1 U6">A1 U6</option>
+                  <option value="A1 U7">A1 U7</option>
+                  <option value="A1 U8">A1 U8</option>
+                  <option value="A1 U9">A1 U9</option>
+                </select>
+              </label>
+              <label>
+                <span class="section-label">错因专项</span>
+                <select id="error-type-filter">
+                  <option value="all">全部错因</option>
+                  <option value="meaning">词义</option>
+                  <option value="spelling">拼写</option>
+                  <option value="article">冠词</option>
+                  <option value="gender">阴阳性</option>
+                  <option value="pos">词性</option>
+                  <option value="listening">听音</option>
+                  <option value="ipa">音标</option>
+                </select>
+              </label>
+            </div>
+            <div class="secondary-actions">
+              <button id="wrong-button" class="secondary-button">只练错词</button>
+              <button id="random-button" class="secondary-button">随机 30 词</button>
+              <button id="error-button" class="secondary-button span-two">练所选错因</button>
+            </div>
+          </section>
+
+          <section class="how-panel">
+            <span class="section-label">复习安排</span>
+            <p>所有词都按旧词复习。统计数据按词条计算；同一词族一天最多进入一个形式，另一个形式会安排到之后复习。</p>
+          </section>
+
+          <section class="analytics-panel">
+            <div class="analytics-heading">
+              <div>
+                <span class="section-label">学习分析</span>
+                <strong><span id="today-completed">0</span> 张</strong>
+                <small>今天已完成</small>
+              </div>
+              <span class="analytics-hint">多词性词分别计入对应词性；错得多的题型会更常出现</span>
+            </div>
+            <div class="analytics-groups">
+              <div>
+                <h3>各词性正确率</h3>
+                <div id="pos-stats" class="metric-list"><span>暂无数据</span></div>
+              </div>
+              <div>
+                <h3>各题型正确率</h3>
+                <div id="mode-stats" class="metric-list"><span>暂无数据</span></div>
+              </div>
+            </div>
+          </section>
+        </section>
+
+        <section id="study-screen" class="screen hidden" aria-live="polite">
+          <div class="study-tools">
+            <button id="previous-button" class="text-button" type="button">返回上一题</button>
+            <div>
+              <button id="pause-button" class="tool-button" type="button">暂停</button>
+              <button id="end-button" class="tool-button" type="button">结束本轮</button>
+            </div>
+          </div>
+          <div class="study-progress">
+            <div class="study-progress-copy">
+              <span id="session-mode">综合练习</span>
+              <span id="session-position">STOP 1 / 20</span>
+            </div>
+            <div class="progress-track">
+              <span class="route-tick tick-1"></span>
+              <span class="route-tick tick-2"></span>
+              <span class="route-tick tick-3"></span>
+              <span id="progress-fill"></span>
+              <span id="progress-marker"></span>
+            </div>
+          </div>
+
+          <article class="study-card">
+            <div class="card-meta">
+              <span id="unit-badge" class="pill">A1 U1</span>
+              <span id="level-badge" class="muted-meta"></span>
+            </div>
+            <p id="question-direction" class="eyebrow"></p>
+            <h2 id="question-text" class="question-text"></h2>
+            <p id="question-hint" class="question-hint"></p>
+
+            <button id="speak-button" class="audio-button hidden" type="button">
+              <span class="audio-dot"></span>
+              再听一次
+            </button>
+
+            <div id="options" class="options hidden"></div>
+            <form id="typing-form" class="typing-form hidden">
+              <label for="answer-input" class="visually-hidden">输入答案</label>
+              <input
+                id="answer-input"
+                type="text"
+                inputmode="text"
+                autocomplete="off"
+                autocorrect="off"
+                autocapitalize="none"
+                spellcheck="false"
+                placeholder="输入法语"
+              />
+              <button type="submit" class="primary-button compact">检查</button>
+            </form>
+
+            <section id="pos-selector" class="pos-selector hidden">
+              <div class="quiz-group">
+                <p>词性（可多选）</p>
+                <div id="pos-options" class="pos-options"></div>
+              </div>
+              <div id="gender-test-group" class="quiz-group hidden">
+                <p>阴阳性（单选）</p>
+                <div id="gender-test-options" class="pos-options"></div>
+              </div>
+              <button id="pos-check-button" class="primary-button compact hidden" type="button">
+                检查词性与阴阳性
+              </button>
+            </section>
+
+            <button id="reveal-button" class="reveal-button" type="button">不记得，显示答案</button>
+
+            <section id="answer-panel" class="answer-panel hidden">
+              <div id="feedback" class="feedback"></div>
+              <button id="override-correct-button" class="override-button hidden" type="button">
+                我认为算对
+              </button>
+              <div class="answer-details">
+                <div>
+                  <span>法语</span>
+                  <strong id="answer-word"></strong>
+                </div>
+                <div>
+                  <span>音标</span>
+                  <strong id="answer-ipa"></strong>
+                </div>
+                <div>
+                  <span>中文</span>
+                  <strong id="answer-chinese"></strong>
+                </div>
+                <div>
+                  <span>词性、阴阳性与冠词</span>
+                  <strong id="answer-pos"></strong>
+                </div>
+              </div>
+              <button id="answer-speak-button" class="audio-button answer-audio" type="button">
+                <span class="audio-dot"></span>
+                朗读单词
+              </button>
+            </section>
+
+            <div id="history-nav" class="history-nav hidden">
+              <button id="history-older" class="secondary-button" type="button">上一题</button>
+              <span id="history-position"></span>
+              <button id="history-newer" class="secondary-button" type="button">下一题</button>
+              <button id="history-return" class="text-button span-two" type="button">返回当前题</button>
+            </div>
+          </article>
+
+          <section id="rating-panel" class="rating-panel hidden">
+            <p>这次记得怎么样？</p>
+            <div class="rating-grid">
+              <button data-rating="1" class="rating again"><span>忘了</span><small id="interval-1"></small></button>
+              <button data-rating="2" class="rating hard"><span>勉强</span><small id="interval-2"></small></button>
+              <button data-rating="3" class="rating good"><span>会了</span><small id="interval-3"></small></button>
+              <button data-rating="4" class="rating easy"><span>很熟</span><small id="interval-4"></small></button>
+            </div>
+          </section>
+        </section>
+      </main>
+    </div>
+
+    <dialog id="settings-dialog">
+      <form method="dialog" class="dialog-content">
+        <div class="dialog-heading">
+          <div>
+            <p class="eyebrow">RÉGLAGES</p>
+            <h2>设置与数据</h2>
+          </div>
+          <button class="icon-button close-button" value="cancel" aria-label="关闭">×</button>
+        </div>
+
+        <label class="setting-row">
+          <span>每轮单词数</span>
+          <select id="new-limit-select">
+            <option value="10">10 个</option>
+            <option value="20">20 个</option>
+            <option value="30">30 个</option>
+            <option value="50">50 个</option>
+            <option value="100">100 个</option>
+          </select>
+        </label>
+
+        <label class="setting-row">
+          <span>目标记忆率</span>
+          <select id="retention-select">
+            <option value="0.85">85% · 更轻松</option>
+            <option value="0.9">90% · 平衡</option>
+            <option value="0.95">95% · 更牢固</option>
+          </select>
+        </label>
+
+        <label class="setting-row">
+          <span>法语朗读声音</span>
+          <select id="voice-select"><option value="">系统默认</option></select>
+        </label>
+
+        <div class="data-actions">
+          <button id="install-button" class="secondary-button hidden" type="button">安装到主屏幕</button>
+          <button id="export-button" class="secondary-button" type="button">导出进度备份</button>
+          <button id="import-button" class="secondary-button" type="button">导入进度备份</button>
+          <input id="import-file" class="hidden" type="file" accept="application/json,.json" />
+          <button id="reset-button" class="secondary-button danger" type="button">清空全部进度</button>
+        </div>
+
+        <p class="settings-note">
+          学习记录只保存在此手机的浏览器中。清除网站数据会删除进度，请定期导出备份。iPhone 建议先“添加到主屏幕”再长期使用。
+        </p>
+        <p class="version-note">MÉTRO · 测试版 0.7 · FSRS 5.4.2</p>
+      </form>
+    </dialog>
+
+    <dialog id="summary-dialog">
+      <div class="dialog-content summary-content">
+        <p class="eyebrow">SESSION TERMINÉE</p>
+        <h2>本轮完成</h2>
+        <div class="summary-numbers">
+          <div><strong id="summary-answered">0</strong><span>张卡片</span></div>
+          <div><strong id="summary-correct">0%</strong><span>正确率</span></div>
+        </div>
+        <p id="summary-copy" class="summary-copy"></p>
+        <button id="summary-close" class="primary-button">回到首页</button>
+      </div>
+    </dialog>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+    <script src="./vendor/ts-fsrs.umd.js"></script>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

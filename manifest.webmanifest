@@ -1,0 +1,25 @@
+{
+  "name": "法语 A1 词汇复习",
+  "short_name": "法语复习",
+  "description": "离线、本地保存、按遗忘规律安排的法语 A1 词汇复习工具",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f5f1e9",
+  "theme_color": "#203245",
+  "lang": "zh-CN",
+  "icons": [
+    {
+      "src": "./icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "./icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
