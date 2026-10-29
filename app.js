@@ -22,7 +22,7 @@ const MODE_LABELS = {
   pos: "词性",
 };
 
-const ALL_MODES = ["zh-fr", "listen", "ipa"];
+const ALL_MODES = ["zh-fr", "listen"];
 
 const POS_LABELS = {
   "n.m.": "阳性名词",
@@ -102,6 +102,8 @@ const ui = {
   speakButton: el("speak-button"),
   options: el("options"),
   typingForm: el("typing-form"),
+  meaningField: el("meaning-field"),
+  meaningInput: el("meaning-input"),
   posSelector: el("pos-selector"),
   posOptions: el("pos-options"),
   genderTestGroup: el("gender-test-group"),
@@ -331,15 +333,26 @@ function familiesAnsweredToday() {
   );
 }
 
-function oneCardPerFamily(ids, limit = Infinity) {
+function oneFamilyBundle(ids, limit = Infinity) {
   const blocked = familiesAnsweredToday();
   const chosen = new Set();
   const output = [];
   for (const id of ids) {
     const card = app.byId.get(id);
     if (!card || blocked.has(card.family) || chosen.has(card.family)) continue;
+    const familyMembers = app.cards
+      .filter(
+        (candidate) =>
+          candidate.family === card.family &&
+          (app.settings.unitFilter === "all" ||
+            candidate.unit === app.settings.unitFilter),
+      )
+      .map((candidate) => candidate.id);
+    if (output.length && output.length + familyMembers.length > limit) break;
     chosen.add(card.family);
-    output.push(id);
+    for (const memberId of familyMembers) {
+      if (!output.includes(memberId)) output.push(memberId);
+    }
     if (output.length >= limit) break;
   }
   return output;
@@ -355,7 +368,7 @@ function sessionIsActive() {
 
 function updateDashboard() {
   const now = new Date();
-  const due = oneCardPerFamily(dueIds(now)).length;
+  const due = dueIds(now).length;
   const unseen = pendingCards().length;
   const attempts = [...app.progress.values()].reduce(
     (sum, row) => sum + (row.attempts || 0),
@@ -481,7 +494,6 @@ function weightedMixedMode(card, seed) {
   const baseWeights = {
     "zh-fr": 1.5,
     listen: 1,
-    ipa: 1,
   };
   const weights = modes.map((mode) => {
     const info = stats.get(mode);
@@ -525,7 +537,7 @@ async function startSession(kind) {
       })
       .sort((a, b) => b.wrongCount - a.wrongCount)
       .map((row) => row.id);
-    ids = oneCardPerFamily(candidates, 40);
+    ids = oneFamilyBundle(candidates, 40);
   } else if (kind === "error") {
     const errorType = ui.errorTypeFilter.value;
     const candidates = [...app.progress.values()]
@@ -548,7 +560,7 @@ async function startSession(kind) {
           (a.errorCounts?.[errorType] || 0),
       )
       .map((row) => row.id);
-    ids = oneCardPerFamily(candidates, 40);
+    ids = oneFamilyBundle(candidates, 40);
   } else if (kind === "random") {
     const candidates = seededShuffle(
       app.cards.filter(
@@ -558,11 +570,11 @@ async function startSession(kind) {
       ),
       String(now.getTime()),
     ).map((card) => card.id);
-    ids = oneCardPerFamily(candidates, 30);
+    ids = oneFamilyBundle(candidates, 30);
   } else {
     const due = dueIds(now);
     const unseen = pendingCards().map((card) => card.id);
-    ids = oneCardPerFamily([...due, ...unseen], limit);
+    ids = oneFamilyBundle([...due, ...unseen], limit);
   }
 
   if (!ids.length) {
@@ -611,7 +623,7 @@ async function renderCurrentQuestion() {
       app.session.currentMode || chooseMixedMode(card, app.session.position),
     options: app.session.currentOptions,
     selectedPos: [],
-    selectedGender: null,
+    selectedGenders: {},
     answered: false,
     result: null,
     errorType: null,
@@ -671,6 +683,8 @@ function renderQuestion() {
   ui.speakButton.classList.add("hidden");
   ui.answerSpeakButton.classList.add("hidden");
   ui.options.innerHTML = "";
+  ui.meaningField.classList.add("hidden");
+  ui.meaningInput.value = "";
   ui.answerInput.value = "";
   ui.answerInput.placeholder = "输入答案";
   ui.answerInput.inputMode = "text";
@@ -679,21 +693,27 @@ function renderQuestion() {
   if (mode === "zh-fr") {
     ui.direction.textContent = "写出对应的法语";
     ui.questionText.textContent = card.chinese;
-    ui.hint.textContent = "名词答案必须带冠词；下方请选择全部适用词性。";
-    ui.answerInput.placeholder = isNoun(card) ? "输入冠词 + 名词" : "输入法语";
+    ui.hint.textContent = `${answerFormatHint(card)}；下方请选择全部适用词性。`;
+    ui.answerInput.placeholder = requiresArticle(card)
+      ? "输入定冠词 + 名词"
+      : "输入法语";
     ui.typingForm.classList.remove("hidden");
     renderPosSelector(card);
     requestAnimationFrame(() => ui.answerInput.focus({ preventScroll: true }));
   } else if (mode === "listen") {
     ui.direction.textContent = "听发音，写出法语单词";
     ui.questionText.textContent = "Écoutez";
-    ui.hint.textContent = "写出完整单词；名词必须带冠词。";
+    ui.hint.textContent = `填写中文释义和法语答案；${answerFormatHint(card)}。`;
+    ui.meaningField.classList.remove("hidden");
     ui.speakButton.classList.remove("hidden");
     ui.typingForm.classList.remove("hidden");
-    ui.answerInput.placeholder = isNoun(card)
-      ? "输入冠词 + 名词"
+    ui.answerInput.placeholder = requiresArticle(card)
+      ? "输入定冠词 + 名词"
       : "输入听到的法语";
     renderPosSelector(card);
+    requestAnimationFrame(() =>
+      ui.meaningInput.focus({ preventScroll: true }),
+    );
     setTimeout(() => speak(displayWord(card)), 180);
   } else if (mode === "ipa") {
     ui.direction.textContent = "根据音标写出法语单词";
@@ -711,16 +731,20 @@ function renderQuestion() {
 function restoreDraft(card, mode) {
   const draft = app.session?.draft;
   if (!draft || draft.cardId !== card.id || draft.mode !== mode) return;
+  ui.meaningInput.value = draft.meaning || "";
   ui.answerInput.value = draft.input || "";
   app.question.selectedPos = [...(draft.selectedPos || [])];
-  app.question.selectedGender = draft.selectedGender || null;
+  app.question.selectedGenders = { ...(draft.selectedGenders || {}) };
   for (const chip of ui.posOptions.querySelectorAll(".pos-chip")) {
     const selected = app.question.selectedPos.includes(chip.dataset.pos);
     chip.classList.toggle("selected", selected);
     chip.setAttribute("aria-pressed", String(selected));
   }
+  renderGenderSelector(card);
   for (const chip of ui.genderTestOptions.querySelectorAll(".pos-chip")) {
-    const selected = chip.dataset.gender === app.question.selectedGender;
+    const selected =
+      app.question.selectedGenders[chip.dataset.genderKind] ===
+      chip.dataset.gender;
     chip.classList.toggle("selected", selected);
     chip.setAttribute("aria-pressed", String(selected));
   }
@@ -731,9 +755,10 @@ function saveDraftNow() {
   app.session.draft = {
     cardId: app.question.card.id,
     mode: app.question.mode,
+    meaning: ui.meaningInput.value,
     input: ui.answerInput.value,
     selectedPos: [...(app.question.selectedPos || [])],
-    selectedGender: app.question.selectedGender || null,
+    selectedGenders: { ...(app.question.selectedGenders || {}) },
   };
   saveMeta("session", app.session).catch(() => {});
 }
@@ -767,7 +792,7 @@ function showHistory(index) {
     card,
     mode: item.mode,
     selectedPos: [],
-    selectedGender: null,
+    selectedGenders: {},
     answered: true,
     result: item.correct,
     errorType: null,
@@ -793,7 +818,7 @@ function showHistory(index) {
 
   ui.feedback.textContent = item.correct ? "当时的判定：正确" : "当时的判定：错误";
   ui.feedback.className = `feedback ${item.correct ? "correct" : "wrong"}`;
-  ui.answerWord.textContent = displayWord(card);
+  ui.answerWord.textContent = answerFormsText(card);
   ui.answerIpa.textContent = card.ipa || "—";
   ui.answerChinese.textContent = card.chinese;
   const answerArticle = isNoun(card)
@@ -817,10 +842,25 @@ function formatGrammar(card) {
     card.partOfSpeechKinds?.length > 0
       ? card.partOfSpeechKinds
       : [card.partOfSpeech].filter(Boolean);
-  const gender =
-    card.genderLabel ||
-    (card.gender === "m" ? "阳性" : card.gender === "f" ? "阴性" : "未标明");
-  return `词性：${labels.join(" / ") || "未标明"} · 阴阳性：${gender}`;
+  const genders = labels
+    .map((kind) => {
+      const value = card.genderByKind?.[kind];
+      if (!value || value === "unknown") return null;
+      const label = { m: "阳性", f: "阴性", same: "阴阳同形" }[value];
+      return label ? `${kind}：${label}` : null;
+    })
+    .filter(Boolean);
+  const genderText =
+    genders.length === 1 && labels.length === 1
+      ? genders[0].split("：").at(-1)
+      : genders.join("；") || "不适用";
+  return `词性：${labels.join(" / ") || "未标明"} · 阴阳性：${genderText}`;
+}
+
+function answerFormatHint(card) {
+  if (!isNoun(card)) return "输入法语原词";
+  if (requiresArticle(card)) return "名词答案必须带定冠词";
+  return "该名词阴阳同形，不需要输入冠词";
 }
 
 function genderOptions(card) {
@@ -854,7 +894,7 @@ function posOptions(card) {
 
 function renderPosSelector(card) {
   app.question.selectedPos = [];
-  app.question.selectedGender = null;
+  app.question.selectedGenders = {};
   ui.posOptions.innerHTML = "";
   for (const option of posOptions(card)) {
     const button = document.createElement("button");
@@ -870,6 +910,7 @@ function renderPosSelector(card) {
       app.question.selectedPos = [...selected];
       button.classList.toggle("selected", selected.has(option));
       button.setAttribute("aria-pressed", String(selected.has(option)));
+      renderGenderSelector(card);
       scheduleDraftSave();
     });
     ui.posOptions.append(button);
@@ -879,40 +920,51 @@ function renderPosSelector(card) {
 }
 
 function renderGenderSelector(card) {
-  const label =
-    card.genderKey === "m"
-      ? "阳性"
-      : card.genderKey === "f"
-        ? "阴性"
-        : card.genderKey === "same"
-          ? "阴阳同形"
-          : null;
   ui.genderTestOptions.innerHTML = "";
-  if (!label) {
+  const selectedKinds = app.question.selectedPos.filter((kind) => {
+    const gender = card.genderByKind?.[kind];
+    return gender && gender !== "unknown";
+  });
+  if (!selectedKinds.length) {
     ui.genderTestGroup.classList.add("hidden");
     return;
   }
-  const options = seededShuffle(
-    ["阳性", "阴性", "阴阳同形"],
-    `${card.id}:gender-test`,
-  );
-  for (const option of options) {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "pos-chip";
-    button.dataset.gender = option;
-    button.textContent = option;
-    button.setAttribute("aria-pressed", "false");
-    button.addEventListener("click", () => {
-      app.question.selectedGender = option;
-      for (const chip of ui.genderTestOptions.querySelectorAll(".pos-chip")) {
-        const selected = chip.dataset.gender === option;
-        chip.classList.toggle("selected", selected);
-        chip.setAttribute("aria-pressed", String(selected));
-      }
-      scheduleDraftSave();
-    });
-    ui.genderTestOptions.append(button);
+  for (const kind of selectedKinds) {
+    const group = document.createElement("div");
+    group.className = "gender-row";
+    const label = document.createElement("span");
+    label.textContent = `${kind}的阴阳性`;
+    const options = document.createElement("div");
+    options.className = "pos-options";
+    const values = ["阳性", "阴性", "阴阳同形"];
+    for (const option of values) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "pos-chip";
+      button.dataset.genderKind = kind;
+      button.dataset.gender = option;
+      button.textContent = option;
+      button.setAttribute(
+        "aria-pressed",
+        String(app.question.selectedGenders[kind] === option),
+      );
+      button.classList.toggle(
+        "selected",
+        app.question.selectedGenders[kind] === option,
+      );
+      button.addEventListener("click", () => {
+        app.question.selectedGenders[kind] = option;
+        for (const chip of options.querySelectorAll(".pos-chip")) {
+          const selected = chip.dataset.gender === option;
+          chip.classList.toggle("selected", selected);
+          chip.setAttribute("aria-pressed", String(selected));
+        }
+        scheduleDraftSave();
+      });
+      options.append(button);
+    }
+    group.append(label, options);
+    ui.genderTestOptions.append(group);
   }
   ui.genderTestGroup.classList.remove("hidden");
 }
@@ -975,6 +1027,14 @@ function normalizedAnswer(value) {
     .trim();
 }
 
+function normalizedAnswerCase(value) {
+  return String(value)
+    .replaceAll("’", "'")
+    .replace(/[.,!?;:«»…]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function accentless(value) {
   return normalizedAnswer(value)
     .normalize("NFD")
@@ -986,14 +1046,14 @@ function isNoun(card) {
 }
 
 function splitTypedArticle(value) {
-  const normalized = normalizedAnswer(value);
+  const normalized = normalizedAnswerCase(value);
   const spaced = normalized.match(
-    /^(de la|de l'|les|le|la|une|un|des|du)\s+(.+)$/,
+    /^(de la|de l'|les|le|la|une|un|des|du)\s+(.+)$/i,
   );
   if (spaced) {
-    return { article: spaced[1], noun: spaced[2].trim() };
+    return { article: spaced[1].toLowerCase(), noun: spaced[2].trim() };
   }
-  const elided = normalized.match(/^l'\s*(.+)$/);
+  const elided = normalized.match(/^l'\s*(.+)$/i);
   if (elided) {
     return { article: "l'", noun: elided[1].trim() };
   }
@@ -1002,72 +1062,122 @@ function splitTypedArticle(value) {
 
 function acceptedArticles(card) {
   const articles = new Set();
-  if (card.article) articles.add(card.article);
-  if (card.article === "l'") {
-    if (card.gender === "m") {
-      articles.add("le");
-      articles.add("un");
-    } else if (card.gender === "f") {
-      articles.add("la");
-      articles.add("une");
-    }
-  }
+  if (!requiresArticle(card)) return articles;
   if (card.partOfSpeechParts?.some((part) => part.includes(".pl."))) {
     articles.add("les");
-    articles.add("des");
-  } else if (card.gender === "m") {
+  } else if (/^[aeiouyàâäéèêëîïôöùûüœh]/i.test(card.lemma)) {
+    articles.add("l'");
+  } else if (nounGender(card) === "m") {
     articles.add("le");
-    articles.add("un");
-  } else if (card.gender === "f") {
+  } else if (nounGender(card) === "f") {
     articles.add("la");
-    articles.add("une");
-  } else if (isNoun(card)) {
-    articles.add("le");
-    articles.add("la");
-    articles.add("un");
-    articles.add("une");
   }
   return articles;
+}
+
+function nounGender(card) {
+  return card.genderByKind?.["名词"] || card.gender || "unknown";
+}
+
+function requiresArticle(card) {
+  const gender = nounGender(card);
+  return (
+    isNoun(card) &&
+    gender !== "same" &&
+    (gender !== "unknown" || Boolean(card.article))
+  );
+}
+
+function canonicalArticle(card) {
+  const articles = acceptedArticles(card);
+  return articles.size ? [...articles][0] : "";
 }
 
 function displayWord(card) {
   const withArticle = (article) =>
     article === "l'" ? `l'${card.lemma}` : `${article} ${card.lemma}`;
   if (!isNoun(card)) return card.word;
-  if (card.article) return withArticle(card.article);
-  if (card.partOfSpeechParts?.some((part) => part.includes(".pl."))) {
-    return withArticle("les");
-  }
-  if (card.gender === "m") return withArticle("un");
-  if (card.gender === "f") return withArticle("une");
-  return `un/une ${card.lemma}`;
+  const article = canonicalArticle(card);
+  return article ? withArticle(article) : card.lemma;
 }
 
-function checkFrenchAnswer(card, value) {
+function checkFrenchAnswer(card, value, { ignoreCase = false } = {}) {
+  const alternatives = card.answerAlternatives || [];
+  if (alternatives.length) {
+    const insensitive = normalizedAnswer(value);
+    const sensitive = normalizedAnswerCase(value);
+    const normalizedAlternatives = alternatives.map(
+      ignoreCase ? normalizedAnswer : normalizedAnswerCase,
+    );
+    const comparable = ignoreCase ? insensitive : sensitive;
+    return {
+      correct: normalizedAlternatives.includes(comparable),
+      missingArticle: false,
+      caseMismatch:
+        !ignoreCase &&
+        alternatives.map(normalizedAnswer).includes(insensitive) &&
+        !normalizedAlternatives.includes(sensitive),
+    };
+  }
   if (!isNoun(card)) {
-    const normalized = normalizedAnswer(value);
-    const expected = normalizedAnswer(card.answer);
+    const insensitive = normalizedAnswer(value);
+    const sensitive = normalizedAnswerCase(value);
+    const expectedSensitive = normalizedAnswerCase(card.answer);
     return {
       correct:
-        normalized === expected ||
-        normalized === normalizedAnswer(card.word),
+        (ignoreCase ? insensitive : sensitive) ===
+          (ignoreCase ? normalizedAnswer(card.answer) : expectedSensitive) ||
+        (ignoreCase ? insensitive : sensitive) ===
+          (ignoreCase
+            ? normalizedAnswer(card.word)
+            : normalizedAnswerCase(card.word)),
       missingArticle: false,
+      caseMismatch:
+        !ignoreCase &&
+        insensitive === normalizedAnswer(card.answer) &&
+        sensitive !== expectedSensitive,
     };
   }
   const { article, noun } = splitTypedArticle(value);
-  if (!article) {
-    return { correct: false, missingArticle: true };
+  if (!article && requiresArticle(card)) {
+    return {
+      correct: false,
+      missingArticle: true,
+      caseMismatch: false,
+    };
   }
+  const insensitiveNoun = normalizedAnswer(noun);
+  const sensitiveNoun = normalizedAnswerCase(noun);
+  const expectedInsensitive = normalizedAnswer(card.lemma);
+  const expectedSensitive = normalizedAnswerCase(card.lemma);
   const nounCorrect =
-    normalizedAnswer(noun) === normalizedAnswer(card.lemma) ||
-    normalizedAnswer(noun) === normalizedAnswer(card.answer);
-  const articleCorrect = acceptedArticles(card).has(article);
+    (ignoreCase ? insensitiveNoun : sensitiveNoun) ===
+      (ignoreCase ? expectedInsensitive : expectedSensitive) ||
+    (ignoreCase ? insensitiveNoun : sensitiveNoun) ===
+      (ignoreCase
+        ? normalizedAnswer(card.answer)
+        : normalizedAnswerCase(card.answer));
+  const articleCorrect =
+    requiresArticle(card)
+      ? acceptedArticles(card).has(article)
+      : article === "";
   return {
     correct: nounCorrect && articleCorrect,
     missingArticle: false,
+    extraArticle: !requiresArticle(card) && Boolean(article),
     nounCorrect,
     articleCorrect,
+    caseMismatch:
+      !ignoreCase &&
+      insensitiveNoun === expectedInsensitive &&
+      sensitiveNoun !== expectedSensitive,
   };
+}
+
+function answerFormsText(card) {
+  return card.answerAlternatives?.length
+    ? card.answerAlternatives.join(" / ")
+    : displayWord(card);
 }
 
 function selectedPosCorrect(card) {
@@ -1082,51 +1192,80 @@ function selectedPosCorrect(card) {
 }
 
 function selectedGenderCorrect(card) {
-  const expected =
-    card.genderKey === "m"
-      ? "阳性"
-      : card.genderKey === "f"
-        ? "阴性"
-        : card.genderKey === "same"
-          ? "阴阳同形"
-          : null;
-  return !expected || app.question.selectedGender === expected;
+  return app.question.selectedPos
+    .filter((kind) => card.genderByKind?.[kind])
+    .every((kind) => {
+      const expected = {
+        m: "阳性",
+        f: "阴性",
+        same: "阴阳同形",
+      }[card.genderByKind[kind]];
+      return !expected || app.question.selectedGenders[kind] === expected;
+    });
+}
+
+function chineseAnswerCorrect(card, value) {
+  const normalized = normalizedAnswer(value);
+  if (!normalized) return false;
+  return [card.chinese, ...(card.chineseParts || [])]
+    .map(normalizedAnswer)
+    .includes(normalized);
 }
 
 function checkTyped(event) {
   event?.preventDefault();
   if (app.question.answered) return;
   const card = app.question.card;
-  const actual = ui.answerInput.value;
+  const actual = ui.answerInput.value.trim();
+  const meaning = ui.meaningInput.value.trim();
+
+  if (!actual) {
+    showToast("请输入法语答案。");
+    return;
+  }
+  if (app.question.mode === "listen" && !meaning) {
+    showToast("请输入中文释义。");
+    return;
+  }
 
   if (!app.question.selectedPos.length) {
     showToast("请至少选择一个词性。");
     return;
   }
-  if (
-    ["m", "f", "same"].includes(card.genderKey) &&
-    !app.question.selectedGender
-  ) {
-    showToast("请选择阴阳性。");
+  const missingGender = app.question.selectedPos.some(
+    (kind) =>
+      card.genderByKind?.[kind] &&
+      ["m", "f", "same"].includes(card.genderByKind[kind]) &&
+      !app.question.selectedGenders[kind],
+  );
+  if (missingGender) {
+    showToast("请为已选择的词性填写阴阳性。");
     return;
   }
 
-  const answerResult = checkFrenchAnswer(card, actual);
+  const ignoreCase = app.question.mode === "listen";
+  const answerResult = checkFrenchAnswer(card, actual, { ignoreCase });
+  const meaningCorrect =
+    app.question.mode === "listen" ? chineseAnswerCorrect(card, meaning) : true;
   const posCorrect = selectedPosCorrect(card);
   const genderCorrect = selectedGenderCorrect(card);
   let message = "";
-  if (answerResult.missingArticle) {
-    message = `名词答案需要带冠词，例如：${displayWord(card)}`;
+  if (!meaningCorrect) {
+    message = `中文释义需要修改；标准答案：${card.chinese}`;
+  } else if (answerResult.missingArticle) {
+    message = `名词答案需要带定冠词，例如：${answerFormsText(card)}`;
+  } else if (answerResult.extraArticle) {
+    message = "该名词阴阳同形，不需要输入冠词。";
   } else if (!answerResult.correct && posCorrect && genderCorrect) {
-    message = `法语答案需要修改；标准答案：${displayWord(card)}`;
+    message = answerResult.caseMismatch
+      ? `拼写正确，但大小写不正确；标准答案：${answerFormsText(card)}`
+      : `法语答案需要修改；标准答案：${answerFormsText(card)}`;
   } else if (answerResult.correct && !posCorrect) {
     message = "法语答案正确，但词性选择不完整或不正确。";
   } else if (answerResult.correct && !genderCorrect) {
     message = "法语答案正确，但阴阳性选择不正确。";
   } else if (!answerResult.correct) {
-    message = `法语答案、词性或阴阳性需要修改。标准答案：${displayWord(
-      card,
-    )}`;
+    message = `法语答案、词性或阴阳性需要修改。标准答案：${answerFormsText(card)}`;
   }
 
   const answerBase = splitTypedArticle(actual).noun;
@@ -1135,10 +1274,24 @@ function checkTyped(event) {
     answerResult.articleCorrect !== false &&
     accentless(answerBase) === accentless(card.answer) &&
     normalizedAnswer(answerBase) !== normalizedAnswer(card.answer);
+  const ignoreCaseNote =
+    ignoreCase &&
+    answerResult.correct &&
+    normalizedAnswerCase(actual) !==
+      normalizedAnswerCase(answerFormsText(card)) &&
+    (card.answerAlternatives || []).some(
+      (answer) =>
+        normalizedAnswer(actual) === normalizedAnswer(answer) &&
+        normalizedAnswerCase(actual) !== normalizedAnswerCase(answer),
+    )
+      ? `听力题不扣大小写；正确写法：${answerFormsText(card)}`
+      : "";
   app.question.errorType =
-    answerResult.correct && posCorrect && genderCorrect
+    meaningCorrect && answerResult.correct && posCorrect && genderCorrect
       ? null
-      : answerResult.missingArticle
+      : !meaningCorrect
+        ? "meaning"
+        : answerResult.missingArticle
         ? "article"
         : !answerResult.correct
           ? app.question.mode === "listen"
@@ -1149,10 +1302,15 @@ function checkTyped(event) {
           : !posCorrect
             ? "pos"
             : "gender";
-  finishAnswer(answerResult.correct && posCorrect && genderCorrect, actual, {
+  finishAnswer(
+    meaningCorrect && answerResult.correct && posCorrect && genderCorrect,
+    actual,
+    {
     accentOnly,
     message,
-  });
+      note: ignoreCaseNote,
+    },
+  );
 }
 
 function revealAnswer() {
@@ -1169,7 +1327,13 @@ function revealAnswer() {
 function finishAnswer(
   correct,
   submitted,
-  { accentOnly = false, revealed = false, close = false, message = "" } = {},
+  {
+    accentOnly = false,
+    revealed = false,
+    close = false,
+    message = "",
+    note = "",
+  } = {},
 ) {
   if (app.question.answered) return;
   const card = app.question.card;
@@ -1185,9 +1349,11 @@ function finishAnswer(
   }
 
   if (correct) {
-    ui.feedback.textContent = accentOnly
-      ? "拼写正确，注意法语重音符号。"
-      : "回答正确。";
+    ui.feedback.textContent =
+      note ||
+      (accentOnly
+        ? "拼写正确，注意法语重音符号。"
+        : "回答正确。");
     ui.feedback.classList.add("correct");
   } else if (accentOnly) {
     ui.feedback.textContent = `拼写基本正确，但缺少重音符号：${card.answer}`;
@@ -1209,7 +1375,7 @@ function finishAnswer(
     ui.feedback.classList.add("wrong");
   }
 
-  ui.answerWord.textContent = displayWord(card);
+  ui.answerWord.textContent = answerFormsText(card);
   ui.answerIpa.textContent = card.ipa || "—";
   ui.answerChinese.textContent = card.chinese;
   const answerArticle = isNoun(card)
@@ -1502,6 +1668,7 @@ function bindEvents() {
   });
   ui.typingForm.addEventListener("submit", checkTyped);
   ui.answerInput.addEventListener("input", scheduleDraftSave);
+  ui.meaningInput.addEventListener("input", scheduleDraftSave);
   ui.revealButton.addEventListener("click", revealAnswer);
   ui.overrideCorrectButton.addEventListener("click", overrideAsCorrect);
   ui.answerSpeakButton.addEventListener("click", () =>
