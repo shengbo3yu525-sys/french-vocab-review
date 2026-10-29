@@ -576,12 +576,31 @@ h1 {
 }
 
 .typing-form {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 8px;
   margin-top: 16px;
 }
 
+.answer-field {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.answer-field label {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.meaning-field {
+  grid-column: 1 / -1;
+}
+
 .typing-form input {
+  width: 100%;
   min-width: 0;
   min-height: 50px;
   flex: 1;
@@ -630,6 +649,20 @@ h1 {
   display: flex;
   flex-wrap: wrap;
   gap: 7px;
+}
+
+.gender-row + .gender-row {
+  margin-top: 11px;
+  padding-top: 11px;
+  border-top: 1px solid var(--line);
+}
+
+.gender-row > span {
+  display: block;
+  margin-bottom: 7px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 650;
 }
 
 .pos-chip {
