@@ -64,7 +64,7 @@
 
           <section class="start-panel">
             <span class="section-label">DÉPART · 本轮复习</span>
-            <p class="mode-summary">每次随机使用中文、听音或音标提示，并同时考察拼写、冠词、词性和阴阳性。</p>
+            <p class="mode-summary">每次随机使用中文或听音提示，并同时考察中文释义、拼写、冠词、词性和阴阳性。</p>
             <button id="start-button" class="primary-button">
               <span>开始本轮复习</span>
               <span class="button-arrow">→</span>
@@ -95,7 +95,6 @@
                   <option value="gender">阴阳性</option>
                   <option value="pos">词性</option>
                   <option value="listening">听音</option>
-                  <option value="ipa">音标</option>
                 </select>
               </label>
             </div>
@@ -108,7 +107,7 @@
 
           <section class="how-panel">
             <span class="section-label">复习安排</span>
-            <p>所有词都按旧词复习。统计数据按词条计算；同一词族一天最多进入一个形式，另一个形式会安排到之后复习。</p>
+            <p>所有词都按旧词复习。同一词族的全部形式会集中出现一次，当天不再重复考察该词族。</p>
           </section>
 
           <section class="analytics-panel">
@@ -171,17 +170,30 @@
 
             <div id="options" class="options hidden"></div>
             <form id="typing-form" class="typing-form hidden">
-              <label for="answer-input" class="visually-hidden">输入答案</label>
-              <input
-                id="answer-input"
-                type="text"
-                inputmode="text"
-                autocomplete="off"
-                autocorrect="off"
-                autocapitalize="none"
-                spellcheck="false"
-                placeholder="输入法语"
-              />
+              <div id="meaning-field" class="answer-field meaning-field hidden">
+                <label for="meaning-input">中文释义</label>
+                <input
+                  id="meaning-input"
+                  type="text"
+                  autocomplete="off"
+                  autocorrect="off"
+                  spellcheck="false"
+                  placeholder="输入中文意思"
+                />
+              </div>
+              <div class="answer-field">
+                <label for="answer-input">法语</label>
+                <input
+                  id="answer-input"
+                  type="text"
+                  inputmode="text"
+                  autocomplete="off"
+                  autocorrect="off"
+                  autocapitalize="none"
+                  spellcheck="false"
+                  placeholder="输入法语"
+                />
+              </div>
               <button type="submit" class="primary-button compact">检查</button>
             </form>
 
@@ -294,7 +306,7 @@
         <p class="settings-note">
           学习记录只保存在此手机的浏览器中。清除网站数据会删除进度，请定期导出备份。iPhone 建议先“添加到主屏幕”再长期使用。
         </p>
-        <p class="version-note">MÉTRO · 测试版 0.8 · FSRS 5.4.2</p>
+        <p class="version-note">MÉTRO · 测试版 1.0 · FSRS 5.4.2</p>
       </form>
     </dialog>
 
