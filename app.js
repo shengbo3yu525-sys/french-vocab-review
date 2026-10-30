@@ -333,26 +333,29 @@ function familiesAnsweredToday() {
   );
 }
 
-function oneFamilyBundle(ids, limit = Infinity) {
+function oneCardPerFamily(
+  ids,
+  limit = Infinity,
+  { preferUnseen = false } = {},
+) {
   const blocked = familiesAnsweredToday();
   const chosen = new Set();
   const output = [];
   for (const id of ids) {
     const card = app.byId.get(id);
     if (!card || blocked.has(card.family) || chosen.has(card.family)) continue;
-    const familyMembers = app.cards
-      .filter(
-        (candidate) =>
-          candidate.family === card.family &&
-          (app.settings.unitFilter === "all" ||
-            candidate.unit === app.settings.unitFilter),
-      )
-      .map((candidate) => candidate.id);
-    if (output.length && output.length + familyMembers.length > limit) break;
     chosen.add(card.family);
-    for (const memberId of familyMembers) {
-      if (!output.includes(memberId)) output.push(memberId);
-    }
+    const representativeId =
+      (preferUnseen &&
+        ids.find((candidateId) => {
+          const candidate = app.byId.get(candidateId);
+          return (
+            candidate?.family === card.family &&
+            !app.progress.has(candidateId)
+          );
+        })) ||
+      id;
+    output.push(representativeId);
     if (output.length >= limit) break;
   }
   return output;
@@ -537,7 +540,7 @@ async function startSession(kind) {
       })
       .sort((a, b) => b.wrongCount - a.wrongCount)
       .map((row) => row.id);
-    ids = oneFamilyBundle(candidates, 40);
+    ids = oneCardPerFamily(candidates, 40);
   } else if (kind === "error") {
     const errorType = ui.errorTypeFilter.value;
     const candidates = [...app.progress.values()]
@@ -560,7 +563,7 @@ async function startSession(kind) {
           (a.errorCounts?.[errorType] || 0),
       )
       .map((row) => row.id);
-    ids = oneFamilyBundle(candidates, 40);
+    ids = oneCardPerFamily(candidates, 40);
   } else if (kind === "random") {
     const candidates = seededShuffle(
       app.cards.filter(
@@ -570,11 +573,13 @@ async function startSession(kind) {
       ),
       String(now.getTime()),
     ).map((card) => card.id);
-    ids = oneFamilyBundle(candidates, 30);
+    ids = oneCardPerFamily(candidates, 30);
   } else {
     const due = dueIds(now);
     const unseen = pendingCards().map((card) => card.id);
-    ids = oneFamilyBundle([...due, ...unseen], limit);
+    ids = oneCardPerFamily([...due, ...unseen], limit, {
+      preferUnseen: true,
+    });
   }
 
   if (!ids.length) {
@@ -612,6 +617,11 @@ async function renderCurrentQuestion() {
   const cardId = app.session.queue[app.session.position];
   const card = app.byId.get(cardId);
   if (!card) {
+    app.session.position += 1;
+    await saveMeta("session", app.session);
+    return renderCurrentQuestion();
+  }
+  if (familiesAnsweredToday().has(card.family)) {
     app.session.position += 1;
     await saveMeta("session", app.session);
     return renderCurrentQuestion();
@@ -686,7 +696,7 @@ function renderQuestion() {
   ui.meaningField.classList.add("hidden");
   ui.meaningInput.value = "";
   ui.answerInput.value = "";
-  ui.answerInput.placeholder = "输入答案";
+  ui.answerInput.placeholder = "";
   ui.answerInput.inputMode = "text";
   ui.feedback.className = "feedback";
 
@@ -694,9 +704,7 @@ function renderQuestion() {
     ui.direction.textContent = "写出对应的法语";
     ui.questionText.textContent = card.chinese;
     ui.hint.textContent = `${answerFormatHint(card)}；下方请选择全部适用词性。`;
-    ui.answerInput.placeholder = requiresArticle(card)
-      ? "输入定冠词 + 名词"
-      : "输入法语";
+    ui.answerInput.placeholder = "";
     ui.typingForm.classList.remove("hidden");
     renderPosSelector(card);
     requestAnimationFrame(() => ui.answerInput.focus({ preventScroll: true }));
@@ -707,9 +715,7 @@ function renderQuestion() {
     ui.meaningField.classList.remove("hidden");
     ui.speakButton.classList.remove("hidden");
     ui.typingForm.classList.remove("hidden");
-    ui.answerInput.placeholder = requiresArticle(card)
-      ? "输入定冠词 + 名词"
-      : "输入听到的法语";
+    ui.answerInput.placeholder = "";
     renderPosSelector(card);
     requestAnimationFrame(() =>
       ui.meaningInput.focus({ preventScroll: true }),
@@ -719,9 +725,7 @@ function renderQuestion() {
     ui.direction.textContent = "根据音标写出法语单词";
     ui.questionText.textContent = card.ipa || "—";
     ui.hint.textContent = "写出完整单词；名词必须带冠词。";
-    ui.answerInput.placeholder = isNoun(card)
-      ? "输入冠词 + 名词"
-      : "输入法语";
+    ui.answerInput.placeholder = "";
     ui.typingForm.classList.remove("hidden");
     renderPosSelector(card);
   }
