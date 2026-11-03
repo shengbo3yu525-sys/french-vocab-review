@@ -1,7 +1,7 @@
 {
-  "name": "法语 A1 词汇复习",
+  "name": "MÉTRO DES MOTS · 法语词汇复习",
   "short_name": "法语复习",
-  "description": "离线、本地保存、按遗忘规律安排的法语 A1 词汇复习工具",
+  "description": "离线、本地保存、按遗忘规律安排的法语词汇复习工具",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

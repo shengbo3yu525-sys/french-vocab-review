@@ -673,7 +673,7 @@ function renderQuestion() {
   const progress = (app.session.position / app.session.queue.length) * 100;
   ui.progressFill.style.width = `${progress}%`;
   ui.progressMarker.style.left = `${progress}%`;
-  ui.unitBadge.textContent = card.unit || "A1";
+  ui.unitBadge.textContent = String(card.unit || "").replace(/^A1\s+/i, "") || "词汇";
   ui.levelBadge.textContent =
     mode === "mixed" ? "混合考察" : `本轮：${MODE_LABELS[mode]}`;
   ui.answerPanel.classList.add("hidden");
